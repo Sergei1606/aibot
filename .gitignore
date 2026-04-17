@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+aibot.db
+celerybeat-schedule
+session_*
