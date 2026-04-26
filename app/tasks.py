@@ -1,3 +1,4 @@
+from app.logger import logger
 from celery import Celery
 from app.config import config
 import time
@@ -46,10 +47,10 @@ celery_app.conf.update(
 def test_task(self):
     """Тестовая задача для проверки Celery"""
     try:
-        print("🐍 Celery worker работает!")
+        logger.info("🐍 Celery worker работает!")
         return {"status": "success", "message": "Celery работает правильно"}
     except Exception as exc:
-        print(f"❌ Ошибка test_task: {exc}")
+        logger.error(f"❌ Ошибка test_task: {exc}")
         raise self.retry(exc=exc)
 
 
@@ -57,12 +58,12 @@ def test_task(self):
 def slow_task(self, seconds: int = 5):
     """Задача с задержкой"""
     try:
-        print(f"⏳ Начинаю задачу на {seconds} секунд...")
+        logger.info(f"⏳ Начинаю задачу на {seconds} секунд...")
         time.sleep(seconds)
-        print(f"✅ Задача выполнена через {seconds} секунд")
+        logger.info(f"✅ Задача выполнена через {seconds} секунд")
         return {"status": "done", "sleep_time": seconds}
     except Exception as exc:
-        print(f"❌ Ошибка slow_task: {exc}")
+        logger.error(f"❌ Ошибка slow_task: {exc}")
         raise self.retry(exc=exc)
 
 
@@ -95,9 +96,9 @@ def parse_all_sources(self):
                     news = parser.parse()
 
                 all_news.extend(news)
-                print(f"📰 {source['name']}: получено {len(news)} новостей")
+                logger.info(f"📰 {source['name']}: получено {len(news)} новостей")
             except Exception as e:
-                print(f"❌ Ошибка парсинга {source['name']}: {e}")
+                logger.error(f"❌ Ошибка парсинга {source['name']}: {e}")
 
         # Сохраняем новости в БД и фильтруем
         filter_obj = NewsFilter(db)
@@ -108,7 +109,7 @@ def parse_all_sources(self):
             existing = db.query(NewsItem).filter(NewsItem.content_hash == content_hash).first()
 
             if existing:
-                print(f"⚠️ Дубль (хеш): {news['title'][:50]}")
+                logger.info(f"⚠️ Дубль (хеш): {news['title'][:50]}")
                 continue
 
             if filter_obj.filter_news(news):
@@ -120,11 +121,11 @@ def parse_all_sources(self):
         db.commit()
         db.close()
 
-        print(f"✅ Сохранено {saved_count} новостей после фильтрации")
+        logger.info(f"✅ Сохранено {saved_count} новостей после фильтрации")
         return {"parsed": len(all_news), "saved": saved_count}
 
     except Exception as exc:
-        print(f"❌ Ошибка parse_all_sources: {exc}")
+        logger.error(f"❌ Ошибка parse_all_sources: {exc}")
         raise self.retry(exc=exc)
 
 
@@ -156,7 +157,7 @@ def generate_post_for_news(self, news_id: str):
         return {"news_id": news_id, "post_id": post.id, "status": "generated"}
 
     except Exception as exc:
-        print(f"❌ Ошибка generate_post_for_news: {exc}")
+        logger.error(f"❌ Ошибка generate_post_for_news: {exc}")
         raise self.retry(exc=exc)
 
 
@@ -184,7 +185,7 @@ def process_all_news(self):
         }
 
     except Exception as exc:
-        print(f"❌ Ошибка process_all_news: {exc}")
+        logger.error(f"❌ Ошибка process_all_news: {exc}")
         raise self.retry(exc=exc)
 
 
@@ -199,7 +200,7 @@ def publish_post_task(self, post_id: str, channel: str = None):
         return {"post_id": post_id, "success": success}
 
     except Exception as exc:
-        print(f"❌ Ошибка publish_post_task: {exc}")
+        logger.error(f"❌ Ошибка publish_post_task: {exc}")
         raise self.retry(exc=exc)
 
 
@@ -214,7 +215,7 @@ def publish_all_pending_task(self, channel: str = None):
         return result
 
     except Exception as exc:
-        print(f"❌ Ошибка publish_all_pending_task: {exc}")
+        logger.error(f"❌ Ошибка publish_all_pending_task: {exc}")
         raise self.retry(exc=exc)
 
 
@@ -247,5 +248,5 @@ def full_news_cycle(self):
         }
 
     except Exception as exc:
-        print(f"❌ Ошибка full_news_cycle: {exc}")
+        logger.error(f"❌ Ошибка full_news_cycle: {exc}")
         raise self.retry(exc=exc)

@@ -3,6 +3,7 @@ from app.config import config
 from app.models import Post
 from sqlalchemy.orm import Session
 from datetime import datetime
+from app.logger import logger
 
 
 class TelegramBotPublisher:
@@ -25,13 +26,13 @@ class TelegramBotPublisher:
             result = response.json()
 
             if result.get("ok"):
-                print(f"✅ Опубликовано в {channel}")
+                logger.info(f"✅ Опубликовано в {channel}")
                 return True
             else:
-                print(f"❌ Ошибка API: {result.get('description')}")
+                logger.error(f"❌ Ошибка API: {result.get('description')}")
                 return False
         except Exception as e:
-            print(f"❌ Ошибка публикации: {e}")
+            logger.error(f"❌ Ошибка публикации: {e}")
             return False
 
 
@@ -47,11 +48,11 @@ class PostPublisher:
         post = self.db.query(Post).where(Post.id == post_id).first()
 
         if not post:
-            print(f"❌ Пост {post_id} не найден")
+            logger.error(f"❌ Пост {post_id} не найден")
             return False
 
         if post.status == "published":
-            print(f"⚠️ Пост {post_id} уже опубликован")
+            logger.warning(f"⚠️ Пост {post_id} уже опубликован")
             return False
 
         target_channel = channel or config.DEFAULT_TELEGRAM_CHANNEL
@@ -62,11 +63,11 @@ class PostPublisher:
             post.status = "published"
             post.published_at = datetime.now()
             self.db.commit()
-            print(f"✅ Пост {post_id} опубликован")
+            logger.info(f"✅ Пост {post_id} опубликован")
         else:
             post.status = "failed"
             self.db.commit()
-            print(f"❌ Пост {post_id} не опубликован")
+            logger.error(f"❌ Пост {post_id} не опубликован")
 
         return success
 
@@ -83,4 +84,5 @@ class PostPublisher:
             else:
                 failed += 1
 
+        logger.info(f"📊 Публикация завершена: {published} успешно, {failed} ошибок")
         return {"published": published, "failed": failed, "total": len(pending)}
