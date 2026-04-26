@@ -22,6 +22,8 @@ class NewsItem(Base):
     raw_text = Column(Text, nullable=True)
     is_filtered = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
+
+    # Поле для защиты от дублей
     content_hash = Column(String(32), index=True, nullable=True)
 
     @staticmethod
