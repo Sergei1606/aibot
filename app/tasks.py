@@ -92,8 +92,19 @@ def parse_all_sources():
     saved_count = 0
 
     for news in all_news:
+        # Вычисляем хеш для проверки дубля
+        content_hash = NewsItem.compute_hash(news['title'], news.get('summary', ''))
+
+        # Проверяем, есть ли уже такая новость
+        existing = db.query(NewsItem).filter(NewsItem.content_hash == content_hash).first()
+        if existing:
+            print(f"⚠️ Дубль (хеш): {news['title'][:50]}")
+            continue  # пропускаем дубль
+
+        # Проверяем фильтрацию
         if filter_obj.filter_news(news):
             news_item = NewsItem(**news)
+            news_item.content_hash = content_hash  # сохраняем хеш
             db.add(news_item)
             saved_count += 1
 

@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Foreign
 from sqlalchemy.sql import func
 from app.database import Base
 import uuid
+import hashlib
 
 
 def generate_uuid():
@@ -21,6 +22,13 @@ class NewsItem(Base):
     raw_text = Column(Text, nullable=True)
     is_filtered = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
+    content_hash = Column(String(32), index=True, nullable=True)
+
+    @staticmethod
+    def compute_hash(title: str, summary: str = "") -> str:
+        """Вычисляет MD5 хеш для проверки дублей"""
+        content = f"{title}|{summary[:200]}"
+        return hashlib.md5(content.encode('utf-8')).hexdigest()
 
 
 class Post(Base):

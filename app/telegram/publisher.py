@@ -44,14 +44,12 @@ class PostPublisher:
 
     def publish_post(self, post_id: str, channel: str = None) -> bool:
         """Публикует пост по ID в указанный канал"""
-        # Сначала получаем объект поста
-        post = self.db.query(Post).filter(Post.id == post_id).first()
+        post = self.db.query(Post).where(Post.id == post_id).first()
 
         if not post:
             print(f"❌ Пост {post_id} не найден")
             return False
 
-        # Теперь сравниваем атрибут объекта
         if post.status == "published":
             print(f"⚠️ Пост {post_id} уже опубликован")
             return False
@@ -74,8 +72,7 @@ class PostPublisher:
 
     def publish_pending_posts(self, channel: str = None) -> dict:
         """Публикует все посты со статусом 'generated'"""
-        # Получаем список объектов постов
-        pending = self.db.query(Post).filter(Post.status == "generated").all()
+        pending = self.db.query(Post).where(Post.status == "generated").all()
 
         published = 0
         failed = 0
