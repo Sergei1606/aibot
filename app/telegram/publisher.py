@@ -1,47 +1,38 @@
-from telethon import TelegramClient, errors
+import requests
 from app.config import config
 from app.models import Post
 from sqlalchemy.orm import Session
-import asyncio
+from datetime import datetime
 
 
-class TelegramPublisher:
-    """Публикация постов в Telegram канал"""
+class TelegramBotPublisher:
+    """Публикация через Telegram Bot API"""
 
     def __init__(self):
-        self.client = None
+        self.bot_token = config.TELEGRAM_BOT_TOKEN
+        self.api_url = f"https://api.telegram.org/bot{self.bot_token}"
 
-    async def _get_client(self):
-        """Создаёт клиент Telethon для публикации"""
-        if self.client is None:
-            self.client = TelegramClient(
-                "session_publisher",
-                config.TELEGRAM_API_ID,
-                config.TELEGRAM_API_HASH
-            )
-            await self.client.start()
-        return self.client
-
-    async def publish_async(self, channel: str, message: str) -> bool:
-        """
-        Асинхронная публикация сообщения в канал
-        Возвращает True при успехе, False при ошибке
-        """
+    def publish(self, channel: str, message: str) -> bool:
+        """Отправляет сообщение в канал через бота"""
         try:
-            client = await self._get_client()
-            await client.send_message(channel, message)
-            print(f"✅ Опубликовано в {channel}")
-            return True
-        except errors.FloodWaitError as e:
-            print(f"⚠️ Flood wait: нужно подождать {e.seconds} секунд")
-            return False
+            url = f"{self.api_url}/sendMessage"
+            payload = {
+                "chat_id": channel,
+                "text": message,
+                "parse_mode": "HTML"
+            }
+            response = requests.post(url, json=payload, timeout=30)
+            result = response.json()
+
+            if result.get("ok"):
+                print(f"✅ Опубликовано в {channel}")
+                return True
+            else:
+                print(f"❌ Ошибка API: {result.get('description')}")
+                return False
         except Exception as e:
             print(f"❌ Ошибка публикации: {e}")
             return False
-
-    def publish(self, channel: str, message: str) -> bool:
-        """Синхронная обёртка для публикации"""
-        return asyncio.run(self.publish_async(channel, message))
 
 
 class PostPublisher:
@@ -49,17 +40,18 @@ class PostPublisher:
 
     def __init__(self, db: Session):
         self.db = db
-        self.publisher = TelegramPublisher()
+        self.publisher = TelegramBotPublisher()
 
     def publish_post(self, post_id: str, channel: str = None) -> bool:
-        """
-        Публикует пост по ID в указанный канал
-        """
+        """Публикует пост по ID в указанный канал"""
+        # Сначала получаем объект поста
         post = self.db.query(Post).filter(Post.id == post_id).first()
+
         if not post:
             print(f"❌ Пост {post_id} не найден")
             return False
 
+        # Теперь сравниваем атрибут объекта
         if post.status == "published":
             print(f"⚠️ Пост {post_id} уже опубликован")
             return False
@@ -70,7 +62,7 @@ class PostPublisher:
 
         if success:
             post.status = "published"
-            post.published_at = __import__('datetime').datetime.now()
+            post.published_at = datetime.now()
             self.db.commit()
             print(f"✅ Пост {post_id} опубликован")
         else:
@@ -81,10 +73,8 @@ class PostPublisher:
         return success
 
     def publish_pending_posts(self, channel: str = None) -> dict:
-        """
-        Публикует все посты со статусом 'generated'
-        Возвращает статистику
-        """
+        """Публикует все посты со статусом 'generated'"""
+        # Получаем список объектов постов
         pending = self.db.query(Post).filter(Post.status == "generated").all()
 
         published = 0
