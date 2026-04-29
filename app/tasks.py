@@ -1,8 +1,9 @@
+import asyncio
+import time
 from app.logger import logger
 from celery import Celery
 from app.config import config
-import time
-from sqlalchemy.orm import Session
+from sqlalchemy.future import select
 from app.database import SessionLocal
 from app.news_parser.site_parser import SiteParser
 from app.news_parser.tg_parser import TelegramParser
@@ -67,21 +68,17 @@ def slow_task(self, seconds: int = 5):
         raise self.retry(exc=exc)
 
 
-# ========== ОСНОВНЫЕ ЗАДАЧИ ==========
+# ========== ОСНОВНЫЕ ЗАДАЧИ (ASYNC FUNCTIONS) ==========
 
-@celery_app.task(bind=True, name="parse_all_sources", max_retries=3, default_retry_delay=60)
-def parse_all_sources(self):
-    """Парсит все источники (сайты и TG каналы)"""
-    try:
-        db = SessionLocal()
-
+async def async_parse_all_sources():
+    async with SessionLocal() as db:
         # Список источников
         sources = [
             {"type": "site", "name": "Habr", "url": "https://habr.com/ru/rss/all/all/?fl=ru"},
             {"type": "site", "name": "Postimees", "url": "https://rus.postimees.ee/rss"},
-            # Telegram каналы временно отключены
-            # {"type": "tg", "name": "Tech Morning", "username": "@tech_morning"},
-            # {"type": "tg", "name": "Rus Delfie", "username": "@rusdelfiee"},
+            # Telegram каналы раскомментированы для работы с Telethon
+            {"type": "tg", "name": "Tech Morning", "username": "@tech_morning"},
+            {"type": "tg", "name": "Rus Delfie", "username": "@rusdelfiee"},
         ]
 
         all_news = []
@@ -90,10 +87,10 @@ def parse_all_sources(self):
             try:
                 if source["type"] == "site":
                     parser = SiteParser(source["name"], source["url"])
-                    news = parser.parse()
+                    news = await parser.parse()
                 else:
                     parser = TelegramParser(source["name"], source["username"])
-                    news = parser.parse()
+                    news = await parser.parse()
 
                 all_news.extend(news)
                 logger.info(f"📰 {source['name']}: получено {len(news)} новостей")
@@ -106,24 +103,115 @@ def parse_all_sources(self):
 
         for news in all_news:
             content_hash = NewsItem.compute_hash(news['title'], news.get('summary', ''))
-            existing = db.query(NewsItem).filter(NewsItem.content_hash == content_hash).first()
+            result = await db.execute(select(NewsItem).filter(NewsItem.content_hash == content_hash))
+            existing = result.first()
 
             if existing:
                 logger.info(f"⚠️ Дубль (хеш): {news['title'][:50]}")
                 continue
 
-            if filter_obj.filter_news(news):
+            if await filter_obj.filter_news(news):
                 news_item = NewsItem(**news)
                 news_item.content_hash = content_hash
                 db.add(news_item)
                 saved_count += 1
 
-        db.commit()
-        db.close()
+        await db.commit()
 
         logger.info(f"✅ Сохранено {saved_count} новостей после фильтрации")
         return {"parsed": len(all_news), "saved": saved_count}
 
+
+async def async_generate_post_for_news(news_id: str):
+    async with SessionLocal() as db:
+        result = await db.execute(select(NewsItem).filter(NewsItem.id == news_id))
+        news = result.scalar_one_or_none()
+        if not news:
+            return {"error": "News not found"}
+
+        result = await db.execute(select(Post).filter(Post.news_id == news_id))
+        existing_post = result.scalar_one_or_none()
+        if existing_post:
+            return {"error": "Post already generated"}
+
+        generated_text = await openai_client.generate_post(news.raw_text or news.summary)
+
+        post = Post(
+            news_id=news_id,
+            generated_text=generated_text,
+            status="generated"
+        )
+        db.add(post)
+        await db.commit()
+
+        return {"news_id": news_id, "post_id": post.id, "status": "generated"}
+
+
+async def async_process_all_news():
+    parse_result = await async_parse_all_sources()
+
+    async with SessionLocal() as db:
+        result = await db.execute(
+            select(NewsItem).outerjoin(Post, NewsItem.id == Post.news_id).filter(Post.id == None)
+        )
+        news_without_posts = result.scalars().all()
+
+    generated_count = 0
+    for news in news_without_posts:
+        generate_post_for_news.delay(news.id)
+        generated_count += 1
+
+    return {
+        "parse_result": parse_result,
+        "news_to_generate": generated_count,
+        "status": "tasks_sent"
+    }
+
+
+async def async_publish_post_task(post_id: str, channel: str = None):
+    async with SessionLocal() as db:
+        publisher = PostPublisher(db)
+        success = await publisher.publish_post(post_id, channel)
+        return {"post_id": post_id, "success": success}
+
+
+async def async_publish_all_pending_task(channel: str = None):
+    async with SessionLocal() as db:
+        publisher = PostPublisher(db)
+        result = await publisher.publish_pending_posts(channel)
+        return result
+
+
+async def async_full_news_cycle():
+    parse_result = await async_parse_all_sources()
+
+    async with SessionLocal() as db:
+        result = await db.execute(
+            select(NewsItem).outerjoin(Post, NewsItem.id == Post.news_id).filter(Post.id == None)
+        )
+        news_without_posts = result.scalars().all()
+
+    generated_count = 0
+    for news in news_without_posts:
+        generate_post_for_news.delay(news.id)
+        generated_count += 1
+
+    publish_all_pending_task.apply_async(args=[], countdown=10)
+
+    return {
+        "parse_result": parse_result,
+        "generation_started": generated_count,
+        "publication_scheduled": True
+    }
+
+
+# ========== CELERY ТАСКИ ==========
+
+@celery_app.task(bind=True, name="parse_all_sources", max_retries=3, default_retry_delay=60)
+def parse_all_sources(self):
+    """Парсит все источники (сайты и TG каналы)"""
+    try:
+        return asyncio.run(async_parse_all_sources())
     except Exception as exc:
         logger.error(f"❌ Ошибка parse_all_sources: {exc}")
         raise self.retry(exc=exc)
@@ -133,29 +221,7 @@ def parse_all_sources(self):
 def generate_post_for_news(self, news_id: str):
     """Генерирует пост для конкретной новости"""
     try:
-        db = SessionLocal()
-
-        news = db.query(NewsItem).filter(NewsItem.id == news_id).first()
-        if not news:
-            return {"error": "News not found"}
-
-        existing_post = db.query(Post).filter(Post.news_id == news_id).first()
-        if existing_post:
-            return {"error": "Post already generated"}
-
-        generated_text = openai_client.generate_post(news.raw_text or news.summary)
-
-        post = Post(
-            news_id=news_id,
-            generated_text=generated_text,
-            status="generated"
-        )
-        db.add(post)
-        db.commit()
-        db.close()
-
-        return {"news_id": news_id, "post_id": post.id, "status": "generated"}
-
+        return asyncio.run(async_generate_post_for_news(news_id))
     except Exception as exc:
         logger.error(f"❌ Ошибка generate_post_for_news: {exc}")
         raise self.retry(exc=exc)
@@ -165,25 +231,7 @@ def generate_post_for_news(self, news_id: str):
 def process_all_news(self):
     """Обрабатывает все неподготовленные новости (парсинг → генерация)"""
     try:
-        parse_result = parse_all_sources()
-
-        db = SessionLocal()
-        news_without_posts = db.query(NewsItem).outerjoin(
-            Post, NewsItem.id == Post.news_id
-        ).filter(Post.id == None).all()
-        db.close()
-
-        generated_count = 0
-        for news in news_without_posts:
-            generate_post_for_news.delay(news.id)
-            generated_count += 1
-
-        return {
-            "parse_result": parse_result,
-            "news_to_generate": generated_count,
-            "status": "tasks_sent"
-        }
-
+        return asyncio.run(async_process_all_news())
     except Exception as exc:
         logger.error(f"❌ Ошибка process_all_news: {exc}")
         raise self.retry(exc=exc)
@@ -193,12 +241,7 @@ def process_all_news(self):
 def publish_post_task(self, post_id: str, channel: str = None):
     """Публикует конкретный пост"""
     try:
-        db = SessionLocal()
-        publisher = PostPublisher(db)
-        success = publisher.publish_post(post_id, channel)
-        db.close()
-        return {"post_id": post_id, "success": success}
-
+        return asyncio.run(async_publish_post_task(post_id, channel))
     except Exception as exc:
         logger.error(f"❌ Ошибка publish_post_task: {exc}")
         raise self.retry(exc=exc)
@@ -208,12 +251,7 @@ def publish_post_task(self, post_id: str, channel: str = None):
 def publish_all_pending_task(self, channel: str = None):
     """Публикует все ожидающие посты"""
     try:
-        db = SessionLocal()
-        publisher = PostPublisher(db)
-        result = publisher.publish_pending_posts(channel)
-        db.close()
-        return result
-
+        return asyncio.run(async_publish_all_pending_task(channel))
     except Exception as exc:
         logger.error(f"❌ Ошибка publish_all_pending_task: {exc}")
         raise self.retry(exc=exc)
@@ -223,30 +261,7 @@ def publish_all_pending_task(self, channel: str = None):
 def full_news_cycle(self):
     """Полный цикл: парсинг → генерация → публикация"""
     try:
-        # Шаг 1: Парсинг
-        parse_result = parse_all_sources()
-
-        # Шаг 2: Генерация постов
-        db = SessionLocal()
-        news_without_posts = db.query(NewsItem).outerjoin(
-            Post, NewsItem.id == Post.news_id
-        ).filter(Post.id == None).all()
-        db.close()
-
-        generated_count = 0
-        for news in news_without_posts:
-            generate_post_for_news.delay(news.id)
-            generated_count += 1
-
-        # Шаг 3: Публикация с задержкой
-        publish_all_pending_task.apply_async(args=[], countdown=10)
-
-        return {
-            "parse_result": parse_result,
-            "generation_started": generated_count,
-            "publication_scheduled": True
-        }
-
+        return asyncio.run(async_full_news_cycle())
     except Exception as exc:
         logger.error(f"❌ Ошибка full_news_cycle: {exc}")
         raise self.retry(exc=exc)

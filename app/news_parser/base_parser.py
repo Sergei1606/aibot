@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Optional
-from app.models import NewsItem
 
 
 class BaseParser(ABC):
@@ -12,7 +11,7 @@ class BaseParser(ABC):
         self.source_type = source_type
 
     @abstractmethod
-    def parse(self) -> List[dict]:
+    async def parse(self) -> List[dict]:
         """Парсит источник и возвращает список словарей с данными новостей"""
         pass
 

@@ -1,4 +1,4 @@
-from openai import OpenAI
+from openai import AsyncOpenAI
 from app.config import config
 from app.prompts import POST_GENERATION_PROMPT
 
@@ -7,9 +7,9 @@ class OpenAIClient:
     """Клиент для работы с OpenAI API"""
 
     def __init__(self):
-        self.client = OpenAI(api_key=config.OPENAI_API_KEY)
+        self.client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
 
-    def generate_post(self, news_text: str, max_retries: int = 3) -> str:
+    async def generate_post(self, news_text: str, max_retries: int = 3) -> str:
         """
         Генерирует пост на основе новости
         Возвращает сгенерированный текст или сообщение об ошибке
@@ -22,7 +22,7 @@ class OpenAIClient:
 
         for attempt in range(max_retries):
             try:
-                response = self.client.chat.completions.create(
+                response = await self.client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=[
                         {"role": "system", "content": "Ты помощник для создания постов в Telegram."},

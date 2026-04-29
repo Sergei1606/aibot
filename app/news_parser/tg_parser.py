@@ -3,6 +3,7 @@ from typing import List, Optional
 from telethon import TelegramClient
 from app.news_parser.base_parser import BaseParser
 from app.config import config
+from app.logger import logger
 
 
 class TelegramParser(BaseParser):
@@ -24,7 +25,7 @@ class TelegramParser(BaseParser):
             await self.client.start()
         return self.client
 
-    async def parse_async(self, limit: int = 10) -> List[dict]:
+    async def parse(self, limit: int = 10) -> List[dict]:
         """Асинхронный парсинг канала"""
         news_list = []
 
@@ -38,17 +39,12 @@ class TelegramParser(BaseParser):
                         title=message.text[:100],  # Первые 100 символов как заголовок
                         summary=message.text[:500],
                         url=None,  # У сообщений TG нет URL
-                        published_at=message.date,
+                        published_at=message.date.replace(tzinfo=None) if message.date else datetime.now(),
                         raw_text=message.text
                     )
                     news_list.append(news_item)
 
         except Exception as e:
-            print(f"Ошибка парсинга канала {self.source_name}: {e}")
+            logger.error(f"Ошибка парсинга канала {self.source_name}: {e}")
 
         return news_list
-
-    def parse(self) -> List[dict]:
-        """Синхронная обёртка (для Celery)"""
-        import asyncio
-        return asyncio.run(self.parse_async())

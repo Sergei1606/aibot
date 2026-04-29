@@ -2,6 +2,9 @@ import feedparser
 from datetime import datetime
 from typing import List
 from app.news_parser.base_parser import BaseParser
+import aiohttp
+import re
+from app.logger import logger
 
 
 class SiteParser(BaseParser):
@@ -11,12 +14,16 @@ class SiteParser(BaseParser):
         super().__init__(source_name, "site")
         self.rss_url = rss_url
 
-    def parse(self) -> List[dict]:
+    async def parse(self) -> List[dict]:
         """Парсит RSS и возвращает список новостей"""
         news_list = []
 
         try:
-            feed = feedparser.parse(self.rss_url)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(self.rss_url) as response:
+                    content = await response.text()
+
+            feed = feedparser.parse(content)
 
             for entry in feed.entries[:10]:  # Берём последние 10 записей
                 # Получаем дату публикации
@@ -29,7 +36,6 @@ class SiteParser(BaseParser):
                                                                                                        'description') else ""
 
                 # Очищаем HTML теги из summary
-                import re
                 summary = re.sub(r'<[^>]+>', '', summary)[:500]
 
                 news_item = self.create_news_item(
@@ -42,6 +48,6 @@ class SiteParser(BaseParser):
                 news_list.append(news_item)
 
         except Exception as e:
-            print(f"Ошибка парсинга сайта {self.source_name}: {e}")
+            logger.error(f"Ошибка парсинга сайта {self.source_name}: {e}")
 
         return news_list
