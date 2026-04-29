@@ -6,7 +6,7 @@ load_dotenv()
 
 class Config:
     # Database
-    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./aibot.db")
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/aibot.db")
 
     # Redis
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -27,6 +27,9 @@ class Config:
 
     # Фильтры (ключевые слова для включения)
     DEFAULT_KEYWORDS = ["новость", "технологии", "IT", "AI", "искусственный интеллект", "разработка"]
+
+    # ID администратора для уведомлений об ошибках
+    ADMIN_TELEGRAM_ID = os.getenv("ADMIN_TELEGRAM_ID")
 
 
 config = Config()

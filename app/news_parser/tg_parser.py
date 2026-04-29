@@ -18,7 +18,7 @@ class TelegramParser(BaseParser):
         """Создаёт клиент Telethon"""
         if self.client is None:
             self.client = TelegramClient(
-                f"session_{self.source_name}",
+                f"data/session_{self.source_name}",
                 config.TELEGRAM_API_ID,
                 config.TELEGRAM_API_HASH
             )

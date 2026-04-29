@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.git/
+.idea/
+.env
+data/
+logs/
+aibot.db
+*.session
+*.session-journal

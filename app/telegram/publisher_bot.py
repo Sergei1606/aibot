@@ -18,7 +18,7 @@ class TelegramBotPublisher:
 
     async def _get_client(self):
         if self.client is None:
-            self.client = TelegramClient("session_publisher", self.api_id, self.api_hash)
+            self.client = TelegramClient("data/session_publisher", self.api_id, self.api_hash)
             await self.client.start(bot_token=self.bot_token)
         return self.client
 
