@@ -9,7 +9,7 @@ class Config:
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/aibot.db")
 
     # Redis
-    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
     # OpenAI
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -18,6 +18,8 @@ class Config:
     TELEGRAM_API_ID = int(os.getenv("TELEGRAM_API_ID", 0))
     TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+    TELEGRAM_PHONE_NUMBER = os.getenv("TELEGRAM_PHONE_NUMBER", "")
 
     # Канал для публикации
     DEFAULT_TELEGRAM_CHANNEL = os.getenv("DEFAULT_TELEGRAM_CHANNEL", "@your_channel")

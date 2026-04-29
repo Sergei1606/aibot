@@ -119,7 +119,7 @@ async def start_process_all():
 async def get_stats(db: AsyncSession = Depends(get_db)):
     """Получить статистику"""
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
     result = await db.execute(select(func.count(models.NewsItem.id)))
     total_news = result.scalar()
 
@@ -141,3 +141,10 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         "published_today": published_today,
         "pending_posts": pending_posts
     }
+
+
+# ========== Эндпоинты для проверки работоспособности ==========
+@router.get("/health")
+async def health_check():
+    """Проверка состояния API"""
+    return {"status": "ok"}
