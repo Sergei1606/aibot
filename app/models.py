@@ -51,7 +51,8 @@ class Source(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     type = Column(String, nullable=False)  # "site" или "tg"
     name = Column(String, nullable=False)
-    url_or_username = Column(String, nullable=False)
+    url = Column(String, nullable=True)      # для сайтов
+    tg_username = Column(String, nullable=True)  # для Telegram
     enabled = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
 
