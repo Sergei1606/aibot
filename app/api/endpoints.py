@@ -27,6 +27,19 @@ async def create_source(source: schemas.SourceCreate, db: AsyncSession = Depends
     await db.refresh(db_source)
     return db_source
 
+@router.put("/sources/{source_id}", response_model=schemas.SourceResponse)
+async def update_source(source_id: int, source_update: schemas.SourceCreate, db: AsyncSession = Depends(get_db)):
+    """Обновить источник"""
+    result = await db.execute(select(models.Source).filter(models.Source.id == source_id))
+    source = result.scalar_one_or_none()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    for key, value in source_update.model_dump().items():
+        setattr(source, key, value)
+    await db.commit()
+    await db.refresh(source)
+    return source
+
 @router.delete("/sources/{source_id}")
 async def delete_source(source_id: int, db: AsyncSession = Depends(get_db)):
     """Удалить источник"""
@@ -53,6 +66,19 @@ async def create_keyword(keyword: schemas.KeywordCreate, db: AsyncSession = Depe
     await db.commit()
     await db.refresh(db_keyword)
     return db_keyword
+
+@router.put("/keywords/{keyword_id}", response_model=schemas.KeywordResponse)
+async def update_keyword(keyword_id: int, keyword_update: schemas.KeywordCreate, db: AsyncSession = Depends(get_db)):
+    """Обновить ключевое слово"""
+    result = await db.execute(select(models.Keyword).filter(models.Keyword.id == keyword_id))
+    keyword = result.scalar_one_or_none()
+    if not keyword:
+        raise HTTPException(status_code=404, detail="Keyword not found")
+    for key, value in keyword_update.model_dump().items():
+        setattr(keyword, key, value)
+    await db.commit()
+    await db.refresh(keyword)
+    return keyword
 
 @router.delete("/keywords/{keyword_id}")
 async def delete_keyword(keyword_id: int, db: AsyncSession = Depends(get_db)):

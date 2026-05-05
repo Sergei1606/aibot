@@ -12,9 +12,12 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:////app/data/aibot.db
+      - DATABASE_URL=postgresql+asyncpg://aibot:aibot@db:5432/aibotdb
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+      db:
+        condition: service_healthy
 
   worker:
     build: .
@@ -25,10 +28,14 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:////app/data/aibot.db
+      - DATABASE_URL=postgresql+asyncpg://aibot:aibot@db:5432/aibotdb
     depends_on:
-      - redis
-      - web
+      redis:
+        condition: service_started
+      web:
+        condition: service_started
+      db:
+        condition: service_healthy
 
   beat:
     build: .
@@ -39,11 +46,33 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:////app/data/aibot.db
+      - DATABASE_URL=postgresql+asyncpg://aibot:aibot@db:5432/aibotdb
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+      db:
+        condition: service_healthy
 
   redis:
     image: redis:alpine
     ports:
       - "6379:6379"
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=aibot
+      - POSTGRES_PASSWORD=aibot
+      - POSTGRES_DB=aibotdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aibot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db_data:

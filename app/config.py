@@ -6,7 +6,7 @@ load_dotenv()
 
 class Config:
     # Database
-    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/aibot.db")
+    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://aibot:aibot@localhost:5432/aibotdb")
 
     # Redis
     REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")

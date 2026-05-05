@@ -6,7 +6,8 @@ from typing import Optional, List
 class SourceBase(BaseModel):
     type: str  # "site" или "tg"
     name: str
-    url_or_username: str
+    url: Optional[str] = None
+    tg_username: Optional[str] = None
     enabled: bool = True
 
 class SourceCreate(SourceBase):
