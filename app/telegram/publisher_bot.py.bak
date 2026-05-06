@@ -1,87 +1,82 @@
-from telethon import TelegramClient
-from app.config import config
-from app.models import Post
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from datetime import datetime
-from app.logger import logger
+from loguru import logger
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
+
+from app.telegram.client import get_bot
+from app.config import settings
 
 
-class TelegramBotPublisher:
-    """Публикация через Telethon (Bot)"""
+async def publish_to_channel(
+    text: str,
+    channel: str | None = None,
+) -> int:
+    """
+    Публикует текст в Telegram-канал через aiogram.
 
-    def __init__(self):
-        self.bot_token = config.TELEGRAM_BOT_TOKEN
-        self.api_id = config.TELEGRAM_API_ID
-        self.api_hash = config.TELEGRAM_API_HASH
-        self.client = None
+    Args:
+        text: Готовый текст поста.
+        channel: username канала (@mychannel) или числовой ID.
+                 Если не указан — берётся из настроек (TG_CHANNEL).
 
-    async def _get_client(self):
-        if self.client is None:
-            self.client = TelegramClient("data/session_publisher", self.api_id, self.api_hash)
-            await self.client.start(bot_token=self.bot_token)
-        return self.client
+    Returns:
+        ID опубликованного сообщения.
 
-    async def publish(self, channel: str, message: str) -> bool:
-        """Отправляет сообщение в канал через Telethon"""
-        try:
-            client = await self._get_client()
-            await client.send_message(channel, message, parse_mode="html")
-            logger.info(f"✅ Опубликовано в {channel}")
-            return True
-        except Exception as e:
-            logger.error(f"❌ Ошибка публикации: {e}")
-            return False
+    Raises:
+        ValueError: Если канал не задан или текст пустой.
+        RuntimeError: При ошибках Telegram Bot API.
+    """
+    target = channel or settings.tg_channel
+
+    if not target:
+        raise ValueError(
+            "Telegram-канал не задан. "
+            "Укажите TG_CHANNEL в .env или передайте channel= в функцию."
+        )
+
+    if not text or not text.strip():
+        raise ValueError("Текст поста не может быть пустым")
+
+    bot = get_bot()
+
+    try:
+        logger.info(f"Publishing to {target}: {text[:60]}...")
+        message = await bot.send_message(chat_id=target, text=text)
+        logger.info(f"Published message ID={message.message_id} to {target}")
+        return message.message_id
+
+    except TelegramForbiddenError:
+        raise RuntimeError(
+            f"Нет прав для записи в канал {target}. "
+            "Убедитесь, что бот является администратором канала "
+            "и имеет право на публикацию сообщений."
+        )
+    except TelegramRetryAfter as e:
+        raise RuntimeError(
+            f"Telegram просит подождать {e.retry_after} секунд из-за rate limit"
+        )
+    except TelegramBadRequest as e:
+        raise RuntimeError(f"Ошибка запроса к Telegram: {e}")
+    except Exception as e:
+        logger.error(f"Failed to publish to {target}: {e}")
+        raise RuntimeError(f"Ошибка публикации: {e}")
 
 
-class PostPublisher:
-    """Управление публикацией постов из БД"""
+async def test_connection(channel: str | None = None) -> bool:
+    """
+    Проверяет подключение к Telegram и доступ к каналу.
+    Используется для диагностики.
+    """
+    target = channel or settings.tg_channel
+    bot = get_bot()
 
-    def __init__(self, db: AsyncSession):
-        self.db = db
-        self.publisher = TelegramBotPublisher()
+    try:
+        me = await bot.get_me()
+        logger.info(f"Connected as bot: @{me.username}")
 
-    async def publish_post(self, post_id: str, channel: str = None) -> bool:
-        """Публикует пост по ID в указанный канал"""
-        result = await self.db.execute(select(Post).where(Post.id == post_id))
-        post = result.scalar_one_or_none()
+        if target:
+            chat = await bot.get_chat(target)
+            logger.info(f"Channel found: {chat.title} ({target})")
 
-        if not post:
-            logger.error(f"❌ Пост {post_id} не найден")
-            return False
-
-        if post.status == "published":
-            logger.info(f"⚠️ Пост {post_id} уже опубликован")
-            return False
-
-        target_channel = channel or config.DEFAULT_TELEGRAM_CHANNEL
-
-        success = await self.publisher.publish(target_channel, post.generated_text)
-
-        if success:
-            post.status = "published"
-            post.published_at = datetime.now()
-            await self.db.commit()
-            logger.info(f"✅ Пост {post_id} опубликован")
-        else:
-            post.status = "failed"
-            await self.db.commit()
-            logger.error(f"❌ Пост {post_id} не опубликован")
-
-        return success
-
-    async def publish_pending_posts(self, channel: str = None) -> dict:
-        """Публикует все посты со статусом 'generated'"""
-        result = await self.db.execute(select(Post).where(Post.status == "generated"))
-        pending = result.scalars().all()
-
-        published = 0
-        failed = 0
-
-        for post in pending:
-            if await self.publish_post(post.id, channel):
-                published += 1
-            else:
-                failed += 1
-
-        return {"published": published, "failed": failed, "total": len(pending)}
+        return True
+    except Exception as e:
+        logger.error(f"Connection test failed: {e}")
+        return False

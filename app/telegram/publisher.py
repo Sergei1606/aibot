@@ -1,88 +1,36 @@
-import requests
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
+from app.telegram.client import get_bot
 from app.config import config
-from app.models import Post
-from sqlalchemy.orm import Session
-from datetime import datetime
 from app.logger import logger
 
 
-class TelegramBotPublisher:
-    """Публикация через Telegram Bot API"""
+async def publish_to_channel(text: str, channel: str = None) -> bool:
+    """Публикует текст в Telegram-канал. Возвращает True при успехе."""
+    target = channel or config.DEFAULT_TELEGRAM_CHANNEL
 
-    def __init__(self):
-        self.bot_token = config.TELEGRAM_BOT_TOKEN
-        self.api_url = f"https://api.telegram.org/bot{self.bot_token}"
+    if not target:
+        logger.error("Telegram-канал не задан")
+        return False
+    if not text or not text.strip():
+        logger.error("Текст поста пуст")
+        return False
 
-    def publish(self, channel: str, message: str) -> bool:
-        """Отправляет сообщение в канал через бота"""
-        try:
-            url = f"{self.api_url}/sendMessage"
-            payload = {
-                "chat_id": channel,
-                "text": message,
-                "parse_mode": "HTML"
-            }
-            response = requests.post(url, json=payload, timeout=30)
-            result = response.json()
+    bot = get_bot()
 
-            if result.get("ok"):
-                logger.info(f"✅ Опубликовано в {channel}")
-                return True
-            else:
-                logger.error(f"❌ Ошибка API: {result.get('description')}")
-                return False
-        except Exception as e:
-            logger.error(f"❌ Ошибка публикации: {e}")
-            return False
-
-
-class PostPublisher:
-    """Управление публикацией постов из БД"""
-
-    def __init__(self, db: Session):
-        self.db = db
-        self.publisher = TelegramBotPublisher()
-
-    def publish_post(self, post_id: str, channel: str = None) -> bool:
-        """Публикует пост по ID в указанный канал"""
-        post = self.db.query(Post).where(Post.id == post_id).first()
-
-        if not post:
-            logger.error(f"❌ Пост {post_id} не найден")
-            return False
-
-        if post.status == "published":
-            logger.warning(f"⚠️ Пост {post_id} уже опубликован")
-            return False
-
-        target_channel = channel or config.DEFAULT_TELEGRAM_CHANNEL
-
-        success = self.publisher.publish(target_channel, post.generated_text)
-
-        if success:
-            post.status = "published"
-            post.published_at = datetime.now()
-            self.db.commit()
-            logger.info(f"✅ Пост {post_id} опубликован")
-        else:
-            post.status = "failed"
-            self.db.commit()
-            logger.error(f"❌ Пост {post_id} не опубликован")
-
-        return success
-
-    def publish_pending_posts(self, channel: str = None) -> dict:
-        """Публикует все посты со статусом 'generated'"""
-        pending = self.db.query(Post).where(Post.status == "generated").all()
-
-        published = 0
-        failed = 0
-
-        for post in pending:
-            if self.publish_post(post.id, channel):
-                published += 1
-            else:
-                failed += 1
-
-        logger.info(f"📊 Публикация завершена: {published} успешно, {failed} ошибок")
-        return {"published": published, "failed": failed, "total": len(pending)}
+    try:
+        logger.info(f"Публикация в {target}: {text[:60]}...")
+        message = await bot.send_message(chat_id=target, text=text)
+        logger.info(f"✅ Опубликовано. ID сообщения: {message.message_id}")
+        return True
+    except TelegramForbiddenError:
+        logger.error(f"Нет прав для записи в канал {target}")
+        return False
+    except TelegramRetryAfter as e:
+        logger.error(f"Rate limit, подождать {e.retry_after} сек")
+        return False
+    except TelegramBadRequest as e:
+        logger.error(f"Ошибка запроса: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Ошибка публикации: {e}")
+        return False

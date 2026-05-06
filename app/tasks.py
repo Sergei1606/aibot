@@ -10,7 +10,13 @@ from app.news_parser.tg_parser import TelegramParser
 from app.utils.filters import NewsFilter
 from app.openai_client import openai_client
 from app.models import NewsItem, Post
-from app.telegram.publisher_bot import PostPublisher
+# === ЗАМЕНА: используем aiogram-публикатор ===
+from app.telegram.publisher import publish_to_channel
+from datetime import datetime
+
+def run_async(coro):
+    """Безопасный запуск асинхронной функции из синхронного Celery"""
+    return asyncio.get_event_loop().run_until_complete(coro)
 
 # Создаём Celery приложение
 celery_app = Celery(
@@ -43,10 +49,8 @@ celery_app.conf.update(
 
 
 # ========== ТЕСТОВЫЕ ЗАДАЧИ ==========
-
 @celery_app.task(bind=True, name="test_task", max_retries=3, default_retry_delay=60)
 def test_task(self):
-    """Тестовая задача для проверки Celery"""
     try:
         logger.info("🐍 Celery worker работает!")
         return {"status": "success", "message": "Celery работает правильно"}
@@ -57,7 +61,6 @@ def test_task(self):
 
 @celery_app.task(bind=True, name="slow_task", max_retries=3, default_retry_delay=60)
 def slow_task(self, seconds: int = 5):
-    """Задача с задержкой"""
     try:
         logger.info(f"⏳ Начинаю задачу на {seconds} секунд...")
         time.sleep(seconds)
@@ -68,17 +71,14 @@ def slow_task(self, seconds: int = 5):
         raise self.retry(exc=exc)
 
 
-# ========== ОСНОВНЫЕ ЗАДАЧИ (ASYNC FUNCTIONS) ==========
+# ========== ОСНОВНЫЕ АСИНХРОННЫЕ ФУНКЦИИ ==========
 
 async def async_parse_all_sources():
     async with SessionLocal() as db:
-        # Список источников
         sources = [
             {"type": "site", "name": "Habr", "url": "https://habr.com/ru/rss/all/all/?fl=ru"},
             {"type": "site", "name": "Postimees", "url": "https://rus.postimees.ee/rss"},
-            # Telegram каналы раскомментированы для работы с Telethon
-            {"type": "tg", "name": "Tech Morning", "username": "@tech_morning"},
-            {"type": "tg", "name": "Rus Delfie", "username": "@rusdelfiee"},
+            {"type": "tg", "name": "Durov", "username": "@durov"},
         ]
 
         all_news = []
@@ -97,7 +97,7 @@ async def async_parse_all_sources():
             except Exception as e:
                 logger.error(f"❌ Ошибка парсинга {source['name']}: {e}")
 
-        # Сохраняем новости в БД и фильтруем
+        # Сохраняем и фильтруем
         filter_obj = NewsFilter(db)
         saved_count = 0
 
@@ -168,50 +168,79 @@ async def async_process_all_news():
     }
 
 
+# === НОВАЯ РЕАЛИЗАЦИЯ ПУБЛИКАЦИИ (aiogram) ===
 async def async_publish_post_task(post_id: str, channel: str = None):
+    """Публикует один пост по ID"""
     async with SessionLocal() as db:
-        publisher = PostPublisher(db)
-        success = await publisher.publish_post(post_id, channel)
+        result = await db.execute(select(Post).where(Post.id == post_id))
+        post = result.scalar_one_or_none()
+
+        if not post:
+            return {"error": "Post not found"}
+        if post.status == "published":
+            return {"error": "Post already published"}
+
+        # Вызываем aiogram-публикатор
+        success = await publish_to_channel(post.generated_text, channel)
+
+        if success:
+            post.status = "published"
+            post.published_at = datetime.now()
+            await db.commit()
+            logger.info(f"✅ Пост {post_id} опубликован")
+        else:
+            post.status = "failed"
+            await db.commit()
+            logger.error(f"❌ Пост {post_id} не опубликован")
+
         return {"post_id": post_id, "success": success}
 
 
 async def async_publish_all_pending_task(channel: str = None):
+    """Публикует все посты со статусом 'generated'"""
     async with SessionLocal() as db:
-        publisher = PostPublisher(db)
-        result = await publisher.publish_pending_posts(channel)
-        return result
+        result = await db.execute(select(Post).where(Post.status == "generated"))
+        pending = result.scalars().all()
+
+        published = 0
+        failed = 0
+        for post in pending:
+            success = await publish_to_channel(post.generated_text, channel)
+            if success:
+                post.status = "published"
+                post.published_at = datetime.now()
+                published += 1
+            else:
+                post.status = "failed"
+                failed += 1
+
+            await db.commit()
+            await asyncio.sleep(3)  # ← задержка 3 секунды между постами
+
+        logger.info(f"📊 Публикация завершена: {published} успешно, {failed} ошибок")
+        return {"published": published, "failed": failed, "total": len(pending)}
 
 
 async def async_full_news_cycle():
-    parse_result = await async_parse_all_sources()
+    """Полный цикл: парсинг → генерация → публикация"""
+    # Парсим и генерируем
+    process_result = await async_process_all_news()
 
-    async with SessionLocal() as db:
-        result = await db.execute(
-            select(NewsItem).outerjoin(Post, NewsItem.id == Post.news_id).filter(Post.id == None)
-        )
-        news_without_posts = result.scalars().all()
-
-    generated_count = 0
-    for news in news_without_posts:
-        generate_post_for_news.delay(news.id)
-        generated_count += 1
-
+    # Планируем публикацию всех готовых постов через 10 секунд
     publish_all_pending_task.apply_async(args=[], countdown=10)
 
     return {
-        "parse_result": parse_result,
-        "generation_started": generated_count,
+        "parse_result": process_result.get("parse_result"),
+        "generation_started": process_result.get("news_to_generate"),
         "publication_scheduled": True
     }
 
 
-# ========== CELERY ТАСКИ ==========
-
+# ========== CELERY ТАСКИ (обёртки) ==========
 @celery_app.task(bind=True, name="parse_all_sources", max_retries=3, default_retry_delay=60)
 def parse_all_sources(self):
-    """Парсит все источники (сайты и TG каналы)"""
     try:
-        return asyncio.run(async_parse_all_sources())
+        return run_async(async_parse_all_sources())
     except Exception as exc:
         logger.error(f"❌ Ошибка parse_all_sources: {exc}")
         raise self.retry(exc=exc)
@@ -219,9 +248,8 @@ def parse_all_sources(self):
 
 @celery_app.task(bind=True, name="generate_post_for_news", max_retries=3, default_retry_delay=60)
 def generate_post_for_news(self, news_id: str):
-    """Генерирует пост для конкретной новости"""
     try:
-        return asyncio.run(async_generate_post_for_news(news_id))
+        return run_async(async_generate_post_for_news(news_id))
     except Exception as exc:
         logger.error(f"❌ Ошибка generate_post_for_news: {exc}")
         raise self.retry(exc=exc)
@@ -229,9 +257,8 @@ def generate_post_for_news(self, news_id: str):
 
 @celery_app.task(bind=True, name="process_all_news", max_retries=3, default_retry_delay=60)
 def process_all_news(self):
-    """Обрабатывает все неподготовленные новости (парсинг → генерация)"""
     try:
-        return asyncio.run(async_process_all_news())
+        return run_async(async_process_all_news())
     except Exception as exc:
         logger.error(f"❌ Ошибка process_all_news: {exc}")
         raise self.retry(exc=exc)
@@ -239,9 +266,8 @@ def process_all_news(self):
 
 @celery_app.task(bind=True, name="publish_post", max_retries=3, default_retry_delay=60)
 def publish_post_task(self, post_id: str, channel: str = None):
-    """Публикует конкретный пост"""
     try:
-        return asyncio.run(async_publish_post_task(post_id, channel))
+        return run_async(async_publish_post_task(post_id, channel))
     except Exception as exc:
         logger.error(f"❌ Ошибка publish_post_task: {exc}")
         raise self.retry(exc=exc)
@@ -249,9 +275,8 @@ def publish_post_task(self, post_id: str, channel: str = None):
 
 @celery_app.task(bind=True, name="publish_all_pending", max_retries=3, default_retry_delay=60)
 def publish_all_pending_task(self, channel: str = None):
-    """Публикует все ожидающие посты"""
     try:
-        return asyncio.run(async_publish_all_pending_task(channel))
+        return run_async(async_publish_all_pending_task(channel))
     except Exception as exc:
         logger.error(f"❌ Ошибка publish_all_pending_task: {exc}")
         raise self.retry(exc=exc)
@@ -259,9 +284,8 @@ def publish_all_pending_task(self, channel: str = None):
 
 @celery_app.task(bind=True, name="full_news_cycle", max_retries=3, default_retry_delay=60)
 def full_news_cycle(self):
-    """Полный цикл: парсинг → генерация → публикация"""
     try:
-        return asyncio.run(async_full_news_cycle())
+        return run_async(async_full_news_cycle())
     except Exception as exc:
         logger.error(f"❌ Ошибка full_news_cycle: {exc}")
         raise self.retry(exc=exc)
