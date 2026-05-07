@@ -1,3 +1,7 @@
+"""
+Главный модуль FastAPI приложения AIBot.
+Содержит инициализацию приложения, веб-интерфейс и управление жизненным циклом.
+"""
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends
 from fastapi.templating import Jinja2Templates

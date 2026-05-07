@@ -7,7 +7,7 @@ from typing import List
 from app.database import get_db
 from app import models, schemas
 from app.tasks import generate_post_for_news, process_all_news, parse_all_sources
-from app.openai_client import openai_client
+from app.ai.openai_client import openai_client
 
 router = APIRouter(prefix="/api", tags=["API"])
 
