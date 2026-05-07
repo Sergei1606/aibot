@@ -211,3 +211,8 @@ marimo/_lsp/
 __marimo__/
 /video_presentation_script.md
 /chat_log.md
+celerybeat-schedule.*
+session_*.session
+test_celery.py
+test_redis.py
+Project M4-1.md

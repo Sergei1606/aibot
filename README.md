@@ -1,6 +1,8 @@
 # 🤖 AIBot — AI-генератор постов для Telegram
 
-Автоматизированный конвейер: сбор новостей (RSS + Telegram) → фильтрация → AI-генерация (GPT) → публикация в Telegram-канал.
+Мощный автоматизированный конвейер для сбора новостей из различных источников (RSS-ленты и Telegram-каналы), их фильтрации, рерайтинга с помощью ИИ (OpenAI GPT-4) и автоматической публикации готовых постов в Telegram-канал. 
+
+Проект разработан в рамках модуля "Project M4: AI-генератор постов для Telegram".
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
@@ -12,59 +14,63 @@
 
 ---
 
-## 🚀 Возможности
+## 🚀 Возможности и Функционал
 
 | Функция | Описание |
 |:---|:---|
-| 📰 **Парсинг** | Автосбор новостей из RSS (Habr, Postimees) и Telegram-каналов (@durov) |
-| 🔍 **Фильтрация** | Отбор по ключевым словам (68 слов) и защита от дубликатов (MD5) |
-| 🤖 **AI-генерация** | Создание постов с emoji и call-to-action через OpenAI GPT-4 |
-| 📤 **Публикация** | Отправка в Telegram-канал через aiogram с защитой от flood |
-| ⏰ **Расписание** | Celery Beat: парсинг каждые 30 мин, публикация каждые 5 мин |
-| 📡 **API** | Swagger UI — управление источниками, ключевыми словами, ручной запуск |
-| 🖥 **Веб-интерфейс** | Статистика и последние посты на главной странице |
-| 🐳 **Docker** | 5 контейнеров: web, worker, beat, redis, postgres |
+| 📰 **Агрегация контента** | Автосбор новостей из RSS (Habr, Postimees) и Telegram-каналов (например, @durov) через `Telethon`. |
+| 🔍 **Умная фильтрация** | Отбор новостей по заданным ключевым словам (гибкая настройка через API) и защита от дубликатов (сравнение по MD5/контенту). |
+| 🤖 **AI-генерация** | Создание лаконичных, вовлекающих постов с emoji и call-to-action через OpenAI GPT-4. |
+| 📤 **Авто-публикация** | Отправка сгенерированных постов в целевой Telegram-канал через `aiogram` с защитой от флуда. |
+| ⏰ **Асинхронные задачи и расписание** | Фоновая обработка через `Celery` и `Redis`. Запуск сбора каждые 30 мин, публикация готовых — каждые 5 мин. |
+| 📡 **REST API & Swagger UI** | Полноценная панель управления (CRUD источников, ключевых слов, запуск задач, просмотр логов и постов). |
+| 🖥 **Веб-интерфейс** | Визуализация статистики и просмотр последних опубликованных постов прямо в браузере. |
+| 🐳 **Docker-оркестрация** | Готовый к деплою `docker-compose` с 5 независимыми сервисами (web, worker, beat, redis, postgres). |
 
 ---
 
-## 🛠 Технологии
+## 🛠 Технологический стек
 
-- **API:** FastAPI (асинхронный) + Swagger (/docs)
-- **Очереди:** Celery + Redis (брокер и backend)
-- **БД:** PostgreSQL 15 + SQLAlchemy 2.0 (asyncpg)
-- **AI:** OpenAI API (GPT-4)
-- **Парсинг:** feedparser (RSS) + Telethon (Telegram)
-- **Публикация:** aiogram 3.x (Bot API)
-- **Контейнеризация:** Docker Compose
+* **Backend & API:** FastAPI (полностью асинхронный) + Swagger UI (`/docs`)
+* **Очереди & Фоновые задачи:** Celery + Redis (в качестве брокера сообщений и backend'а)
+* **База данных:** PostgreSQL 15 + SQLAlchemy 2.0 (`asyncpg`)
+* **Искусственный Интеллект:** OpenAI API (GPT-4)
+* **Интеграции & Парсинг:** `feedparser` (для RSS) + `Telethon` (парсинг Telegram-каналов)
+* **Публикация контента:** `aiogram` 3.x (Telegram Bot API)
+* **Контейнеризация:** Docker + Docker Compose
 
 ---
 
-## ⚙️ Быстрый старт
+## ⚙️ Быстрый старт (Развертывание)
 
-### 1. Клонировать и настроить .env
-
+### 1. Клонирование репозитория
 ```powershell
 git clone https://github.com/Sergei1606/aibot.git
 cd aibot
 ```
 
-Создать .env в корне:
-```
-TELEGRAM_BOT_TOKEN=123456:ABCdef
+### 2. Настройка переменных окружения (`.env`)
+Создайте файл `.env` в корневой директории проекта и заполните его по аналогии с `.env.example`:
+```ini
+TELEGRAM_BOT_TOKEN=123456:ABCdef...
 TELEGRAM_API_ID=12345678
 TELEGRAM_API_HASH=abcdef1234567890abcdef
 TELEGRAM_PHONE_NUMBER=+79161234567
 DATABASE_URL=postgresql+asyncpg://aibot:aibot@db:5432/aibotdb
 REDIS_URL=redis://redis:6379/0
 OPENAI_API_KEY=sk-proj-...
-DEFAULT_TELEGRAM_CHANNEL=@your_channel
+DEFAULT_TELEGRAM_CHANNEL=@your_channel_username
 ```
-### 2. Запустить
-```
+
+### 3. Запуск через Docker Compose
+Запустит все необходимые базы данных, очереди и воркеры в изолированных контейнерах:
+```bash
 docker-compose up -d --build
 ```
-### 3. Создать сессию Telethon (для @durov)
-```
+
+### 4. Создание сессии Telethon (Авторизация для парсинга TG-каналов)
+Чтобы парсить новости из Telegram, необходимо единоразово авторизоваться:
+```powershell
 python -c "
 import asyncio
 from telethon import TelegramClient
@@ -73,70 +79,87 @@ import os
 load_dotenv()
 
 async def main():
-    client = TelegramClient('data/session_durov', 
+    client = TelegramClient('data/session_tg', 
         int(os.getenv('TELEGRAM_API_ID')), 
         os.getenv('TELEGRAM_API_HASH'))
     await client.start(phone=os.getenv('TELEGRAM_PHONE_NUMBER'))
-    print('OK')
+    print('✅ Сессия успешно создана')
     await client.disconnect()
 asyncio.run(main())
 "
 ```
-### 4. Открыть
-- Swagger: http://localhost:8000/docs
-- Веб-интерфейс: http://localhost:8000/
 
-## 📡 API (основные эндпоинты)
-- Метод	/	URL	/	Описание
+### 5. Доступ к интерфейсам
+- **Swagger API Документация:** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Веб-интерфейс (Статистика):** [http://localhost:8000/](http://localhost:8000/)
 
+---
 
-- GET	/api/sources/	Источники
-- POST	/api/sources/	Добавить источник
-- GET	/api/keywords/	Ключевые слова
-- POST	/api/keywords/	Добавить слово
-- GET	/api/news/	Новости
-- GET	/api/posts/	Посты
-- POST	/api/generate/	Ручная генерация
-- POST	/api/tasks/parse	Запуск парсинга
-- POST	/api/tasks/process-all	Полный цикл
-- GET	/api/stats/	Статистика
-- GET	/health	Проверка
+## 📡 Основные API-эндпоинты
 
-## ⏰ Расписание
-- full_news_cycle — парсинг → генерация → публикация	- 30 мин
-- publish_all_pending — публикация готовых постов	- 5 мин
+| Метод | URL | Описание |
+|:---|:---|:---|
+| **GET** | `/api/sources/` | Получить список источников новостей |
+| **POST** | `/api/sources/` | Добавить новый источник (RSS или Telegram) |
+| **GET** | `/api/keywords/` | Получить список ключевых слов для фильтрации |
+| **POST** | `/api/keywords/` | Добавить ключевое слово |
+| **GET** | `/api/news/` | Просмотр собранных новостей |
+| **GET** | `/api/posts/` | Просмотр сгенерированных и опубликованных постов |
+| **POST** | `/api/generate/` | Запустить ручную генерацию поста через AI |
+| **POST** | `/api/tasks/parse` | Запустить задачу парсинга в Celery |
+| **POST** | `/api/tasks/process-all` | Запуск полного цикла (парсинг → генерация → публикация) |
+| **GET** | `/api/stats/` | Получить статистику бота |
+| **GET** | `/health` | Health-check сервиса |
 
-## 📁 Структура
-```
+---
+
+## ⏰ Расписание (Celery Beat)
+
+- `full_news_cycle` — Запуск полного цикла: парсинг → генерация → публикация (Каждые **30 минут**)
+- `publish_all_pending` — Отправка готовых, но еще не отправленных постов в Telegram (Каждые **5 минут**)
+
+---
+
+## 📁 Структура проекта
+
+```text
 aibot/
 ├── app/
-│   ├── api/             # CRUD-эндпоинты
-│   ├── news_parser/     # RSS + Telegram парсеры
-│   ├── telegram/        # aiogram publisher + client
-│   ├── utils/           # фильтры
-│   ├── templates/       # веб-интерфейс
-│   ├── main.py          # FastAPI + lifespan
-│   ├── tasks.py         # Celery задачи
-│   ├── models.py        # SQLAlchemy модели
-│   ├── config.py        # настройки
-│   └── database.py      # подключение к БД
-├── data/                # сессии Telethon
-├── docker-compose.yml
-└── requirements.txt
+│   ├── ai/              # Интеграция с OpenAI, генератор промптов
+│   ├── api/             # FastAPI CRUD-эндпоинты и роутеры
+│   ├── news_parser/     # Модули парсинга (RSS и Telethon для TG)
+│   ├── telegram/        # Публикация через aiogram и клиент Telethon
+│   ├── utils/           # Утилиты, фильтры, хелперы
+│   ├── templates/       # HTML-шаблоны для веб-интерфейса
+│   ├── main.py          # Точка входа FastAPI приложения
+│   ├── tasks.py         # Определение фоновых задач Celery
+│   ├── models.py        # SQLAlchemy ORM модели базы данных
+│   ├── config.py        # Загрузка и валидация конфигурации (Pydantic)
+│   └── database.py      # Настройка сессий подключения к PostgreSQL
+├── data/                # Директория для хранения *.session файлов Telethon
+├── tests/               # Pytest тесты
+├── docker-compose.yml   # Docker манифест для всех сервисов
+└── requirements.txt     # Python зависимости
 ```
-## 📝 Чек-лист
-```
-№	Функция	                        Статус
-1	Сбор новостей (RSS)	         ✅
-2	Сбор новостей (Telegram)	 ✅
-3	Фильтрация по ключевым словам	 ✅
-4	AI-генерация (OpenAI)	         ✅
-5	Публикация в Telegram	         ✅
-6	API (CRUD)	                 ✅
-7	Документация (Swagger)	         ✅
-8	Веб-интерфейс	                 ✅
-9	Docker Compose	                 ✅
-10	Celery Beat	                 ✅
-```
-Автор: Sergei Pavljuk
-    Дата: 07.05.2026
+
+---
+
+## 📝 Чек-лист выполнения требований проекта (Project M4)
+
+| № | Требование | Статус |
+|:---:|:---|:---:|
+| 1 | Сбор новостей (сайты / RSS) | ✅ |
+| 2 | Сбор новостей (Telegram) | ✅ |
+| 3 | Фильтрация по ключевым словам и антидубликат | ✅ |
+| 4 | AI-генерация через OpenAI | ✅ |
+| 5 | Публикация в Telegram через бота | ✅ |
+| 6 | API-управление источниками и фильтрами (CRUD) | ✅ |
+| 7 | Документация API (Swagger /docs/) | ✅ |
+| 8 | Наличие Веб-интерфейса | ✅ |
+| 9 | Оркестрация через Docker Compose | ✅ |
+| 10 | Асинхронные задачи (Celery + Redis) | ✅ |
+
+---
+
+**Автор:** Sergei Pavljuk  
+**Дата:** Май 2026
