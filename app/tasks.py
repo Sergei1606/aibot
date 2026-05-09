@@ -90,9 +90,7 @@ async def async_parse_all_sources():
         sources = [
             {"type": "site", "name": "Habr", "url": "https://habr.com/ru/rss/all/all/?fl=ru"},
             {"type": "site", "name": "Postimees", "url": "https://rus.postimees.ee/rss"},
-            # Telegram каналы раскомментированы для работы с Telethon
-            {"type": "tg", "name": "Tech Morning", "username": "@tech_morning"},
-            {"type": "tg", "name": "Rus Delfie", "username": "@rusdelfiee"},
+            {"type": "tg", "name": "Durov", "username": "@durov"},
         ]
 
         all_news = []
