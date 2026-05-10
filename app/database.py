@@ -1,7 +1,5 @@
-"""
-Настройки подключения к базе данных.
-Создает асинхронный движок SQLAlchemy и фабрику сессий.
-"""
+"""Подключение к PostgreSQL: движок, сессии, создание таблиц."""
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.pool import NullPool

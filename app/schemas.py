@@ -1,3 +1,5 @@
+"""Pydantic-схемы для валидации запросов и ответов API."""
+
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List

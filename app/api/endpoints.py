@@ -1,3 +1,5 @@
+"""API-эндпоинты: CRUD источников, ключевых слов, запуск задач, статистика."""
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -51,7 +53,6 @@ async def delete_source(source_id: int, db: AsyncSession = Depends(get_db)):
     await db.commit()
     return {"message": "Source deleted"}
 
-# ========== Эндпоинты для ключевых слов ==========
 @router.get("/keywords/", response_model=List[schemas.KeywordResponse])
 async def get_keywords(db: AsyncSession = Depends(get_db)):
     """Получить все ключевые слова"""
@@ -91,7 +92,6 @@ async def delete_keyword(keyword_id: int, db: AsyncSession = Depends(get_db)):
     await db.commit()
     return {"message": "Keyword deleted"}
 
-# ========== Эндпоинты для новостей ==========
 @router.get("/news/", response_model=List[schemas.NewsItemResponse])
 async def get_news(skip: int = 0, limit: int = 50, db: AsyncSession = Depends(get_db)):
     """Получить список новостей"""
@@ -107,14 +107,12 @@ async def get_news_item(news_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="News not found")
     return news
 
-# ========== Эндпоинты для постов ==========
 @router.get("/posts/", response_model=List[schemas.PostResponse])
 async def get_posts(skip: int = 0, limit: int = 50, db: AsyncSession = Depends(get_db)):
     """Получить список постов"""
     result = await db.execute(select(models.Post).order_by(models.Post.created_at.desc()).offset(skip).limit(limit))
     return list(result.scalars().all())
 
-# ========== Эндпоинты для генерации ==========
 @router.post("/generate/", response_model=schemas.GenerateResponse)
 async def generate_manual(request: schemas.GenerateRequest):
     """Ручная генерация поста из текста"""
@@ -127,7 +125,6 @@ async def generate_for_news(news_id: str):
     task = generate_post_for_news.delay(news_id)
     return {"task_id": task.id, "status": "started"}
 
-# ========== Эндпоинты для задач ==========
 @router.post("/tasks/parse")
 async def start_parsing():
     """Запустить парсинг всех источников"""
@@ -140,7 +137,6 @@ async def start_process_all():
     task = process_all_news.delay()
     return {"task_id": task.id, "status": "started"}
 
-# ========== Эндпоинты для статистики ==========
 @router.get("/stats/")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     """Получить статистику"""
@@ -169,7 +165,6 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
-# ========== Эндпоинты для проверки работоспособности ==========
 @router.get("/health")
 async def health_check():
     """Проверка состояния API"""

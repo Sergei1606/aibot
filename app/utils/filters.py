@@ -1,3 +1,5 @@
+"""Фильтрация новостей по ключевым словам и защита от дубликатов."""
+
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select

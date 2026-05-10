@@ -1,3 +1,5 @@
+"""Асинхронный клиент OpenAI API для генерации постов."""
+
 from openai import AsyncOpenAI
 from app.config import config
 from app.logger import logger
@@ -16,7 +18,7 @@ class OpenAIClient:
     async def generate_post(self, text: str) -> str:
         if not self.client:
             return "Ошибка: не настроен ключ OpenAI."
-            
+
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,

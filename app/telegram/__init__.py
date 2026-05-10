@@ -1,0 +1,1 @@
+"""Модуль интеграции с Telegram: aiogram-бот и Telethon-сессии."""

@@ -1,7 +1,5 @@
-"""
-Главный модуль FastAPI приложения AIBot.
-Содержит инициализацию приложения, веб-интерфейс и управление жизненным циклом.
-"""
+"""Точка входа FastAPI: инициализация БД, веб-интерфейс, health-check."""
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends
 from fastapi.templating import Jinja2Templates
@@ -14,62 +12,59 @@ from app import models
 from app.api import endpoints
 from app.logger import logger
 
+# Константы для автоинициализации
+DEFAULT_KEYWORDS = [
+    "AI", "ML", "GPT", "LLM", "OpenAI", "Copilot",
+    "искусственный интеллект", "машинное обучение", "нейросет",
+    "ChatGPT", "Claude", "Gemini", "DeepSeek", "Grok",
+    "MCP", "AGI", "prompt", "промпт", "agent", "агент",
+    "python", "fastapi", "docker", "github", "gitlab",
+    "postgresql", "redis", "celery", "rabbitmq", "kafka",
+    "linux", "bash", "devops", "backend", "frontend",
+    "fullstack", "аутентификация", "авторизация",
+    "Cursor", "Windsurf", "Bolt", "Replit", "Vercel",
+    "VS Code", "PyCharm", "JetBrains",
+    "стартап", "инвестиции", "MVP", "POC",
+    "производительность", "оптимизация", "методологи",
+    "agile", "scrum", "kanban",
+    "telegram", "бот", "чат", "канал", "OSINT",
+    "технологии", "разработка", "программирование",
+    "open source", "API", "security", "кибербезопасность"
+]
+
+DEFAULT_SOURCES = [
+    {"type": "site", "name": "Habr", "url": "https://habr.com/ru/rss/all/all/?fl=ru"},
+    {"type": "site", "name": "Postimees", "url": "https://rus.postimees.ee/rss"},
+    {"type": "tg", "name": "Durov", "tg_username": "@durov"},
+]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Управление жизненным циклом приложения"""
-    # Startup: создаём таблицы при запуске
-    print("🚀 Starting application...")
+    """Управление жизненным циклом приложения."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print("✅ Database tables created")
+    logger.info("Таблицы базы данных созданы")
 
-    # Заполняем ключевые слова и источники по умолчанию, если таблицы пусты
     async with SessionLocal() as db:
-        # Ключевые слова
         result = await db.execute(select(models.Keyword))
         if not result.scalars().all():
-            default_keywords = [
-                "AI", "ML", "GPT", "LLM", "OpenAI", "Copilot",
-                "искусственный интеллект", "машинное обучение", "нейросет",
-                "ChatGPT", "Claude", "Gemini", "DeepSeek", "Grok",
-                "MCP", "AGI", "prompt", "промпт", "agent", "агент",
-                "python", "fastapi", "docker", "github", "gitlab",
-                "postgresql", "redis", "celery", "rabbitmq", "kafka",
-                "linux", "bash", "devops", "backend", "frontend",
-                "fullstack", "аутентификация", "авторизация",
-                "Cursor", "Windsurf", "Bolt", "Replit", "Vercel",
-                "VS Code", "PyCharm", "JetBrains",
-                "стартап", "инвестиции", "MVP", "POC",
-                "производительность", "оптимизация", "методологи",
-                "agile", "scrum", "kanban",
-                "telegram", "бот", "чат", "канал", "OSINT",
-                "технологии", "разработка", "программирование",
-                "open source", "API", "security", "кибербезопасность"
-            ]
-            for word in default_keywords:
+            for word in DEFAULT_KEYWORDS:
                 db.add(models.Keyword(word=word))
             await db.commit()
-            logger.info(f"🔑 Добавлено {len(default_keywords)} ключевых слов по умолчанию")
+            logger.info(f"Добавлено {len(DEFAULT_KEYWORDS)} ключевых слов")
 
-        # Источники
         result = await db.execute(select(models.Source))
         if not result.scalars().all():
-            default_sources = [
-                models.Source(type="site", name="Habr", url="https://habr.com/ru/rss/all/all/?fl=ru"),
-                models.Source(type="site", name="Postimees", url="https://rus.postimees.ee/rss"),
-                models.Source(type="tg", name="Durov", tg_username="@durov"),
-            ]
-            db.add_all(default_sources)
+            for src in DEFAULT_SOURCES:
+                db.add(models.Source(**src))
             await db.commit()
-            logger.info("📡 Источники добавлены по умолчанию")
+            logger.info(f"Добавлено {len(DEFAULT_SOURCES)} источников")
 
     yield
 
-    # Shutdown: закрываем соединения
-    print("🛑 Shutting down application...")
     await engine.dispose()
-    print("✅ Database connections closed")
+    logger.info("Приложение остановлено")
 
 
 app = FastAPI(
@@ -78,22 +73,19 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Подключаем роутеры
 app.include_router(endpoints.router)
 
-# Jinja2 для веб-интерфейса
 templates = Jinja2Templates(directory="app/templates")
 
 
 @app.get("/", include_in_schema=False)
 async def root_ui(request: Request, db: AsyncSession = Depends(get_db)):
-    # Получаем последние 10 постов
+    """Веб-интерфейс: статистика и последние посты."""
     result = await db.execute(
         select(models.Post).order_by(models.Post.created_at.desc()).limit(10)
     )
     posts = list(result.scalars().all())
 
-    # Статистика
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     result = await db.execute(
         select(func.count(models.Post.id)).filter(
@@ -118,4 +110,5 @@ async def root_ui(request: Request, db: AsyncSession = Depends(get_db)):
 
 @app.get("/health")
 async def health_check():
+    """Health-check эндпоинт."""
     return {"status": "healthy"}

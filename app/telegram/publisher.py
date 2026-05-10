@@ -1,3 +1,5 @@
+"""Публикация постов в Telegram-канал через aiogram."""
+
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 from app.telegram.client import get_bot
 from app.config import config

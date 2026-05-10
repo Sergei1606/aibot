@@ -1,7 +1,5 @@
-"""
-Асинхронные задачи Celery для обработки новостей.
-Управляет полным циклом: парсинг, генерация постов и их публикация.
-"""
+"""Фоновые задачи Celery: парсинг, генерация, публикация."""
+
 import asyncio
 import time
 from app.logger import logger
@@ -57,7 +55,6 @@ def _get_local_sessionmaker():
     )
     return engine, async_sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
 
-# ========== ТЕСТОВЫЕ ЗАДАЧИ ==========
 
 @celery_app.task(bind=True, name="test_task", max_retries=3, default_retry_delay=60)
 def test_task(self):
@@ -81,7 +78,6 @@ def slow_task(self, seconds: int = 5):
         logger.error(f"❌ Ошибка slow_task: {exc}")
         raise self.retry(exc=exc)
 
-# ========== ОСНОВНЫЕ ЗАДАЧИ (ASYNC FUNCTIONS) ==========
 
 async def async_parse_all_sources():
     engine, SessionLocal = _get_local_sessionmaker()
@@ -269,7 +265,6 @@ async def async_full_news_cycle():
     }
 
 
-# ========== CELERY ТАСКИ ==========
 
 @celery_app.task(bind=True, name="parse_all_sources", max_retries=3, default_retry_delay=60)
 def parse_all_sources(self):

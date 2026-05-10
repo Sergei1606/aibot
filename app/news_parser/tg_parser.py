@@ -1,3 +1,5 @@
+"""Парсер Telegram-каналов через Telethon."""
+
 from datetime import datetime
 from typing import List, Optional
 from telethon import TelegramClient

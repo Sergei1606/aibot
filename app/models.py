@@ -1,7 +1,5 @@
-"""
-ORM-модели базы данных (SQLAlchemy).
-Описывают структуры: новости, посты, источники и ключевые слова.
-"""
+"""SQLAlchemy-модели: NewsItem, Post, Source, Keyword."""
+
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey
 from sqlalchemy.sql import func
 from app.database import Base

@@ -1,3 +1,5 @@
+"""Настройка логирования через loguru."""
+
 from loguru import logger
 import sys
 
