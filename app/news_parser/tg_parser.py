@@ -20,11 +20,13 @@ class TelegramParser(BaseParser):
         """Создаёт клиент Telethon"""
         if self.client is None:
             self.client = TelegramClient(
-                f"data/session_{self.source_name}",
+                "data/session_tg",
                 config.TELEGRAM_API_ID,
                 config.TELEGRAM_API_HASH
             )
-            await self.client.start()
+            await self.client.connect()
+            if not await self.client.is_user_authorized():
+                raise Exception("Сессия Telegram не авторизована! Сначала выполните скрипт из README.")
         return self.client
 
     async def parse(self, limit: int = 10) -> List[dict]:
@@ -48,5 +50,9 @@ class TelegramParser(BaseParser):
 
         except Exception as e:
             logger.error(f"Ошибка парсинга канала {self.source_name}: {e}")
+        finally:
+            if self.client:
+                await self.client.disconnect()
+                self.client = None
 
         return news_list
