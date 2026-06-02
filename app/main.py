@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database import engine, Base, get_db, SessionLocal
 from app import models
 from app.api import endpoints
@@ -48,18 +48,26 @@ async def lifespan(app: FastAPI):
 
     async with SessionLocal() as db:
         result = await db.execute(select(models.Keyword))
-        if not result.scalars().all():
-            for word in DEFAULT_KEYWORDS:
+        existing_keywords = {k.word for k in result.scalars().all()}
+        added_kw_count = 0
+        for word in DEFAULT_KEYWORDS:
+            if word not in existing_keywords:
                 db.add(models.Keyword(word=word))
+                added_kw_count += 1
+        if added_kw_count > 0:
             await db.commit()
-            logger.info(f"Добавлено {len(DEFAULT_KEYWORDS)} ключевых слов")
+            logger.info(f"Добавлено {added_kw_count} новых ключевых слов")
 
         result = await db.execute(select(models.Source))
-        if not result.scalars().all():
-            for src in DEFAULT_SOURCES:
+        existing_source_names = {src.name for src in result.scalars().all()}
+        added_src_count = 0
+        for src in DEFAULT_SOURCES:
+            if src["name"] not in existing_source_names:
                 db.add(models.Source(**src))
+                added_src_count += 1
+        if added_src_count > 0:
             await db.commit()
-            logger.info(f"Добавлено {len(DEFAULT_SOURCES)} источников")
+            logger.info(f"Добавлено {added_src_count} новых источников")
 
     yield
 
@@ -86,7 +94,7 @@ async def root_ui(request: Request, db: AsyncSession = Depends(get_db)):
     )
     posts = list(result.scalars().all())
 
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     result = await db.execute(
         select(func.count(models.Post.id)).filter(
             models.Post.status == "published",
