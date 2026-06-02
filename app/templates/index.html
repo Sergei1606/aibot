@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,7 +29,7 @@
             background-color: var(--bg-color);
             color: var(--text-main);
             min-height: 100vh;
-            background-image: 
+            background-image:
                 radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 25%),
                 radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.15), transparent 25%);
             background-attachment: fixed;
@@ -139,9 +140,20 @@
             font-size: 0.75rem;
         }
 
-        .status-published { background: rgba(16, 185, 129, 0.2); color: var(--success); }
-        .status-generated { background: rgba(59, 130, 246, 0.2); color: var(--primary); }
-        .status-failed { background: rgba(244, 63, 94, 0.2); color: #f43f5e; }
+        .status-published {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .status-generated {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--primary);
+        }
+
+        .status-failed {
+            background: rgba(244, 63, 94, 0.2);
+            color: #f43f5e;
+        }
 
         .post-content {
             white-space: pre-wrap;
@@ -152,19 +164,43 @@
 
         /* Animations */
         @keyframes fadeInDown {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
+
         @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
+
         @keyframes fadeInLeft {
-            from { opacity: 0; transform: translateX(-20px); }
-            to { opacity: 1; transform: translateX(0); }
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
@@ -183,7 +219,8 @@
             </div>
             <div class="stat-card">
                 <div class="stat-label">System Status</div>
-                <div class="stat-value" style="font-size: 1.5rem; margin-top: 1.2rem; color: var(--primary);">Online</div>
+                <div class="stat-value" style="font-size: 1.5rem; margin-top: 1.2rem; color: var(--primary);">Online
+                </div>
             </div>
         </div>
 
@@ -193,7 +230,8 @@
                 {% for post in posts %}
                 <div class="post-card" style="animation-delay: {{ 0.6 + loop.index * 0.1 }}s">
                     <div class="post-meta">
-                        <span>{{ post.created_at.strftime('%Y-%m-%d %H:%M') if post.created_at else 'Unknown Date' }}</span>
+                        <span>{{ post.created_at.strftime('%Y-%m-%d %H:%M') if post.created_at else 'Unknown Date'
+                            }}</span>
                         <span class="status-badge status-{{ post.status }}">{{ post.status }}</span>
                     </div>
                     <div class="post-content">{{ post.generated_text }}</div>
@@ -207,4 +245,5 @@
         </div>
     </div>
 </body>
+
 </html>

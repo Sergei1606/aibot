@@ -66,7 +66,7 @@ DEFAULT_TELEGRAM_CHANNEL=@your_channel_username
 Запустит все необходимые базы данных, очереди и воркеры в изолированных контейнерах:
 ```bash
 docker-compose up -d --build
-```
+```docker-compose up -d --build
 
 ### 4. Создание сессии Telethon (Авторизация для парсинга TG-каналов)
 Чтобы парсить новости из Telegram, необходимо единоразово авторизоваться:
