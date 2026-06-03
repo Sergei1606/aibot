@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 from app.database import get_db
 from app import models, schemas
@@ -140,7 +140,7 @@ async def start_process_all():
 @router.get("/stats/")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     """Получить статистику"""
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
 
     result = await db.execute(select(func.count(models.NewsItem.id)))
     total_news = result.scalar()

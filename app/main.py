@@ -94,7 +94,7 @@ async def root_ui(request: Request, db: AsyncSession = Depends(get_db)):
     )
     posts = list(result.scalars().all())
 
-    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
     result = await db.execute(
         select(func.count(models.Post.id)).filter(
             models.Post.status == "published",
@@ -120,3 +120,9 @@ async def root_ui(request: Request, db: AsyncSession = Depends(get_db)):
 async def health_check():
     """Health-check эндпоинт."""
     return {"status": "healthy"}
+
+
+@app.get("/admin", include_in_schema=False)
+async def admin_ui(request: Request):
+    """Веб-интерфейс: панель администратора."""
+    return templates.TemplateResponse("admin.html", {"request": request})
